@@ -55,7 +55,8 @@ class TestGDPopt(unittest.TestCase):
         SolverFactory('gdpopt').solve(
             eight_process, strategy='LOA',
             mip_solver=required_solvers[1],
-            nlp_solver=required_solvers[0])
+            nlp_solver=required_solvers[0],
+            tee = True)
 
         self.assertTrue(fabs(value(eight_process.profit.expr) - 68) <= 1E-2)
 

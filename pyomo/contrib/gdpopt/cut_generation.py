@@ -85,10 +85,42 @@ def add_outer_approximation_cuts(nlp_result, solve_data, config):
 
 
 def add_affine_cuts(nlp_result, solve_data, config):
-    """Adds rigorous affine cuts."""
-    pass
-    # Add constraints corresponding to the affine cuts at the solution point
-    # given by the nlp_result
+    m = solve_data.linear_GDP
+    GDPopt = m.GDPopt_utils
+    for var, val in zip(GDPopt.working_var_list, nlp_result.var_values):
+        if val is not None and not var.fixed:
+            var.value = val
+
+    for constr in GDPopt.working_constraints_list:
+        # mcpp stuff
+        mc_eqn = mc(constr.body)
+        ccSlope = mc_eqn.subcc()
+        cvSlope = mc_eqn.subcv()
+        ccStart = mc_eqn.concave()
+        cvStart = mc_eqn.convex()
+        ub_int = mc_eqn.upper()
+        lb_int = mc_eqn.lower()
+        varList = list(EXPR.identify_variables(constr.body))
+        parent_block = constr.parent_block()
+        # Create a block on which to put outer approximation cuts.
+        aff_utils = parent_block.component('GDPopt_aff')
+        if aff_utils is None:
+            aff_utils = parent_block.GDPopt_aff = Block(
+                doc="Block holding affine constraints")
+            aff_utils.GDPopt_aff_cons = ConstraintList()
+            aff_utils.GDPopt_aff_vars = VarList()
+        aff_cuts = aff_utils.GDPopt_aff_cons
+        aff_vars = aff_utils.GDPopt_aff_vars
+        ccSlack_var = oa_utils.GDPopt_aff_vars.add(bounds = (lb_int,\
+                                            ub_int), initialize = ccStart)
+        cvSlack_var = oa_utils.GDPopt_aff_vars.add(bounds = (lb_int,\
+                                            ub_int), initialize = cvStart)
+        #for var in varList:
+        #    aff_vars.add(var)
+        aff_cuts.add(expr = sum(ccSlope[var]*(var - value(var))\
+                            for var in varList) + ccStart >= ccSlack_var)
+        aff_cuts.add(expr = sum(cvSlope[var]*(var - value(var))\
+                            for var in varList) + cvStart <= cvSlack_var)
 
 
 def add_integer_cut(var_values, solve_data, config, feasible=False):
