@@ -2,11 +2,13 @@
 # in the compiled MC++ wrapper library
 # Note: argument to pow must be an integer
 from __future__ import division
-from pyomo.environ import *
+from pyomo.core import Constraint, value
 import ctypes
+import os
+from pyomo.core.kernel.component_map import ComponentMap
 from pyomo.core.expr.current import identify_variables
-from pyomo.core.expr.expr_pyomo5 import \
-    (GenericExpressionVisitor,
+from pyomo.core.expr.expr_pyomo5 import (
+    GenericExpressionVisitor,
     nonpyomo_leaf_types,
     ProductExpression,
     SumExpression,
@@ -26,9 +28,9 @@ from pyomo.core.expr.expr_pyomo5 import \
     NPV_UnaryFunctionExpression,
     NPV_AbsExpression)
 
+path  = os.path.dirname(__file__)
 
-
-mcpp_lib = ctypes.CDLL('mcppInterface.so')
+mcpp_lib = ctypes.CDLL(path + '/mcppInterface.so')
 
 
 class MCPP_visitor(GenericExpressionVisitor):
@@ -177,6 +179,7 @@ class MCPP_visitor(GenericExpressionVisitor):
         elif isinstance(node, NPV_AbsExpression):
             ans = self.mcpp.new_NPV(value(data[0]))
         else:
+            print(node.is_expression_type())
             raise RuntimeError("Unhandled expression type: %s" % (type(node)))
 
         return ans
@@ -197,6 +200,13 @@ class MCPP_visitor(GenericExpressionVisitor):
                     for i in identify_variables(self.expr):
                         count+=1
                     self.varsIndex[child] = self.i
+                    #print(child)
+                    #print(type(child))
+                    #print(child.lb, value(child), child.ub, count, self.i)
+                    if child.lb == None:
+                        child.setlb(0)
+                    if child.ub == None:
+                        child.setub(500000)
                     self.known_vars[child] = self.mcpp.new_createVar(
                         child.lb, value(child), child.ub, count, self.i)
                     self.i += 1
@@ -248,10 +258,10 @@ class McCormick(object):
                                                                     """
 
     def __init__(self, expression):
-        self.mcpp_lib = ctypes.CDLL('mcppInterface.so')
+        self.mcpp_lib = ctypes.CDLL(path + '/mcppInterface.so')
         self.oExpr = expression
-        self.visitor = MCPP_visitor(mcpp_lib, expression.expr)
-        self.mcppExpression = self.visitor.walk_expression(expression.expr)
+        self.visitor = MCPP_visitor(mcpp_lib, expression)
+        self.mcppExpression = self.visitor.walk_expression(expression)
         self.expr = self.mcppExpression 
 
         self.mcpp_lib.new_displayOutput.argtypes = [ctypes.c_void_p]

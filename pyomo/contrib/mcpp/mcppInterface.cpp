@@ -208,6 +208,7 @@ extern "C"
         return ans;
     }
 
+
     void *new_createConstant(double cons)
     {
         void *ans = createConstant(cons);
