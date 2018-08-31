@@ -2,8 +2,12 @@
 # in the compiled MC++ wrapper library
 # Note: argument to pow must be an integer
 from __future__ import division
-from pyomo.environ import *
 import ctypes
+from pyomo.core import ConcreteModel
+from pyomo.core import Var
+from pyomo.core import Expression
+from pyomo.core import ComponentMap
+from pyomo.core import value
 from pyomo.core.expr.current import identify_variables
 from pyomo.core.expr.expr_pyomo5 import \
     (GenericExpressionVisitor,
