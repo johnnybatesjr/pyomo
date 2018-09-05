@@ -354,7 +354,8 @@ class GenericExpressionVisitor(object):
                     or not expr.is_expression_type():
                 args = ()
             else:
-                args = tuple(expr.args)
+                #args = tuple(expr.args)
+                args = expr.args
         ptr = (None, expr, args, data, len(args), 0)
         node = ptr[1]
 
