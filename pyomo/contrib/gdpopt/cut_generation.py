@@ -10,9 +10,13 @@ from pyomo.core.expr import current as EXPR
 from pyomo.core.kernel.component_map import ComponentMap
 from pyomo.core.kernel.component_set import ComponentSet
 from pyomo.contrib.gdpopt.util import time_code
+<<<<<<< HEAD
 from pyomo.contrib.mcpp.pyomo_mcpp import McCormick as mc
 from pyomo.core.base.var import _GeneralVarData
 from pyomo.core.base.var import SimpleVar
+=======
+
+>>>>>>> upstream/master
 
 def add_outer_approximation_cuts(nlp_result, solve_data, config):
     """Add outer approximation cuts to the linear GDP model."""
@@ -49,6 +53,7 @@ def add_outer_approximation_cuts(nlp_result, solve_data, config):
                     'OA cut addition for %s skipped because it is in '
                     'the ignore set.' % constr.name)
                 continue
+<<<<<<< HEAD
 
             config.logger.debug(
                 "Adding OA cut for %s with dual value %s"
@@ -130,6 +135,43 @@ def add_affine_cuts(nlp_result, solve_data, config):
                 aff_cuts.add(expr = Slack_var <= constr.upper)
             if constr.lower is not None:
                 aff_cuts.add(expr = Slack_var >= constr.lower)
+=======
+
+            config.logger.debug(
+                "Adding OA cut for %s with dual value %s"
+                % (constr.name, dual_value))
+
+            # TODO make this more efficient by not having to use
+            # differentiate() at each iteration.
+            jacobians = GDPopt.jacobians.get(constr, None)
+            if jacobians is None:
+                constr_vars = list(EXPR.identify_variables(constr.body))
+                jac_list = differentiate(constr.body, wrt_list=constr_vars)
+                jacobians = ComponentMap(zip(constr_vars, jac_list))
+                GDPopt.jacobians[constr] = jacobians
+
+            # Create a block on which to put outer approximation cuts.
+            oa_utils = parent_block.component('GDPopt_OA')
+            if oa_utils is None:
+                oa_utils = parent_block.GDPopt_OA = Block(
+                    doc="Block holding outer approximation cuts "
+                    "and associated data.")
+                oa_utils.GDPopt_OA_cuts = ConstraintList()
+                oa_utils.GDPopt_OA_slacks = VarList(
+                    bounds=(0, config.max_slack),
+                    domain=NonNegativeReals, initialize=0)
+
+            oa_cuts = oa_utils.GDPopt_OA_cuts
+            slack_var = oa_utils.GDPopt_OA_slacks.add()
+            oa_cuts.add(
+                expr=copysign(1, sign_adjust * dual_value) * (
+                    value(constr.body) + sum(
+                        value(jacobians[var]) * (var - value(var))
+                        for var in jacobians)) + slack_var <= 0)
+            counter += 1
+
+        config.logger.info('Added %s OA cuts' % counter)
+>>>>>>> upstream/master
 
 
 def add_integer_cut(var_values, solve_data, config, feasible=False):

@@ -57,8 +57,10 @@ __all__ = (
 'NPV_SumExpression',
 'NPV_UnaryFunctionExpression',
 'NPV_AbsExpression',
+'StreamBasedExpressionVisitor',
 'SimpleExpressionVisitor',
 'ExpressionValueVisitor',
+'replace_expressions',
 'ExpressionReplacementVisitor',
 'LinearDecompositionError',
 'SumExpressionBase',
@@ -224,18 +226,21 @@ class linear_expression(object):
 #
 #-------------------------------------------------------
 
-class GenericExpressionVisitor(object):
-    """This class implements a generic event-based expression walker.
+class StreamBasedExpressionVisitor(object):
+    """This class implements a generic stream-based expression walker.
 
-    The following events are triggered as expression trees are walked
-    (with a depth-first strategy):
+    This visitor walks an expression tree using a depth-first strategy
+    and generates a full event stream similar to other tree visitors
+    (e.g., the expat XML parser).  The following events are triggered
+    through callback functions as the traversal enters and leaves nodes
+    in the tree:
 
       enterNode(N1)
       {for N2 in N1.args:}
         beforeChild(N1, N2)
           enterNode(N2)
-          exitNode(N2)
-        acceptData(N1, data, child_result)
+          exitNode(N2, data)
+        acceptChildResult(N1, data, child_result)
         afterChild(N1, N2)
       exitNode(N1)
 
@@ -258,10 +263,11 @@ class GenericExpressionVisitor(object):
         exitNode() is called after the node is completely processed (as
         the walker returns up the tree to the parent node).  It is
         passed the node and the results data structure (defined by
-        enterNode()), and is expected to return the "result" for this
-        node.  If not specified, the default action is to return the
-        data object from enterNode().
- 
+        enterNode() and possibly further modified by
+        acceptChildResult()), and is expected to return the "result" for
+        this node.  If not specified, the default action is to return
+        the data object from enterNode().
+
     descend, child_result = beforeChild(self, node, child):
 
         beforeChild() is called by a node for every child before
@@ -269,25 +275,26 @@ class GenericExpressionVisitor(object):
         arguments.  beforeChild should return a tuple (descend,
         child_result).  If descend is False, the child node will not be
         entered and the value returned to child_result will be passed to
-        the node's acceptResult callback.  Returning None is equivalent
-        to (True, None).  The default behavior if not specified is
-        equivalent to (True, None).
+        the node's acceptChildResult callback.  Returning None is
+        equivalent to (True, None).  The default behavior if not
+        specified is equivalent to (True, None).
 
-    acceptData(self, node, data, child_result):
+    data = acceptChildResult(self, node, data, child_result):
 
-        acceptData() is called for each child result being returned to a
-        node.  This callback is responsible for recording the result for
-        later processing or passing up the tree.  It is passed the node,
-        the result data structure (see enterNode()), and the child
-        result.  No value is returned.  If acceptData is not specified,
-        it does nothing if data is None, otherwise it calls
+        acceptChildResult() is called for each child result being
+        returned to a node.  This callback is responsible for recording
+        the result for later processing or passing up the tree.  It is
+        passed the node, the result data structure (see enterNode()),
+        and the child result.  The data structure (possibly modified or
+        replaced) must be returned.  If acceptChildResult is not
+        specified, it does nothing if data is None, otherwise it calls
         data.append(result).
 
     afterChild(self, node, child):
 
         afterChild() is called by a node for every child node
         immediately after processing the node is complete before control
-        moves to the next child or up to tge parent node.  The node and
+        moves to the next child or up to the parent node.  The node and
         child node are passed, and nothing is returned.  If afterChild
         is not specified, no action takes place.
 
@@ -299,22 +306,25 @@ class GenericExpressionVisitor(object):
         the walker returns the result obtained from the exitNode
         callback on the root node.
 
-    Consumers interact with this class by either deriving from it and
+    Clients interact with this class by either deriving from it and
     implementing the necessary callbacks (see above), assigning callable
     functions to an instance of this class, or passing the callback
     functions as arguments to this class' constructor.
 
     """
 
-    extentionPoints = ('enterNode','exitNode','beforeChild','afterChild',
-                       'acceptData','finalizeResult')
+    # The list of event methods that can either be implemented by
+    # derived classes or specified as callback functions to the class
+    # constructor:
+    client_methods = ('enterNode','exitNode','beforeChild','afterChild',
+                      'acceptChildResult','finalizeResult')
     def __init__(self, **kwds):
         # This is slightly tricky: We want derived classes to be able to
         # override the "None" defaults here, and for keyword arguments
         # to override both.  The hasattr check prevents the "None"
         # defaults from overriding attributes or methods defined on
         # derived classes.
-        for field in self.extentionPoints:
+        for field in self.client_methods:
             if field in kwds:
                 setattr(self, field, kwds.pop(field))
             elif not hasattr(self, field):
@@ -332,8 +342,8 @@ class GenericExpressionVisitor(object):
         #    ( pointer to parent,
         #      expression node,
         #      tuple/list of child nodes (arguments),
-        #      data object to aggregate results from child nodes,
         #      number of child nodes (arguments),
+        #      data object to aggregate results from child nodes,
         #      current child node )
         #
         # The walker only needs a single pointer to the end of the list
@@ -356,18 +366,25 @@ class GenericExpressionVisitor(object):
             else:
                 #args = tuple(expr.args)
                 args = expr.args
-        ptr = (None, expr, args, data, len(args), 0)
-        node = ptr[1]
+        node = expr
+        child_idx = 0
+        ptr = (None, node, args, len(args), data, child_idx)
 
         while 1:
-            i = ptr[5]
-            if i < ptr[4]:
+            if child_idx < ptr[3]:
                 # This node still has children to process
-                child = ptr[2][i]
-                # Update the child argument counter.  Because we are
-                # using tuples, we need to recreate the "ptr" object
-                # (linked list node)
-                ptr = ptr[:5] + (i+1,)
+                child = ptr[2][child_idx]
+                # Increment the child index pointer here for
+                # consistency.  Note that this means that for the bulk
+                # of the time, 'child_idx' is actually the index of the
+                # *next* child to be processed, and will not match the
+                # value of ptr[5].  This provides a modest performance
+                # improvement, as we only have to recreate the ptr tuple
+                # just before we descend further into the tree (i.e., we
+                # avoid recreating the tuples for the special case where
+                # beforeChild indicates that we should not descend
+                # further).
+                child_idx += 1
 
                 # Notify this node that we are about to descend into a
                 # child.
@@ -382,10 +399,11 @@ class GenericExpressionVisitor(object):
                         # We are aborting processing of this child node.
                         # Tell this node to accept the child result and
                         # we will move along
-                        if self.acceptData:
-                            self.acceptData(node, ptr[3], child_result)
-                        else:
-                            ptr[3].append(child_result)
+                        if self.acceptChildResult is not None:
+                            data = self.acceptChildResult(
+                                node, data, child_result)
+                        elif data is not None:
+                            data.append(child_result)
                         # And let the node know that we are done with a
                         # child node
                         if self.afterChild is not None:
@@ -393,6 +411,11 @@ class GenericExpressionVisitor(object):
                         # Jump to the top to continue processing the
                         # next child node
                         continue
+
+                # Update the child argument counter in the stack.
+                # Because we are using tuples, we need to recreate the
+                # "ptr" object (linked list node)
+                ptr = ptr[:4] + (data, child_idx,)
 
                 # We are now going to actually enter this node.  The
                 # node will tell us the list of its child nodes that we
@@ -415,16 +438,17 @@ class GenericExpressionVisitor(object):
                         args = ()
                     else:
                         args = child.args
-                ptr = (ptr, child, args, data, len(args), 0)
                 node = child
+                child_idx = 0
+                ptr = (ptr, node, args, len(args), data, child_idx)
 
             else:
                 # We are done with this node.  Call exitNode to compute
                 # any result
                 if self.exitNode is not None:
-                    node_result = self.exitNode(node, ptr[3])
+                    node_result = self.exitNode(node, data)
                 else:
-                    node_result = ptr[3]
+                    node_result = data
 
                 # Pop the node off the linked list
                 ptr = ptr[0]
@@ -438,12 +462,14 @@ class GenericExpressionVisitor(object):
                 # Not done yet, update node to point to the new active
                 # node
                 node, child = ptr[1], node
+                data = ptr[4]
+                child_idx = ptr[5]
 
                 # We need to alert the node to accept the child's result:
-                if self.acceptData is not None:
-                    self.acceptData(node, ptr[3], node_result)
-                elif ptr[3] is not None:
-                    ptr[3].append(node_result)
+                if self.acceptChildResult is not None:
+                    data = self.acceptChildResult(node, data, node_result)
+                elif data is not None:
+                    data.append(node_result)
 
                 # And let the node know that we are done with a child node
                 if self.afterChild is not None:
@@ -702,6 +728,36 @@ class ExpressionValueVisitor(object):
             else:
                 return self.finalize(ans)
 
+def replace_expressions(expr,
+                        substitution_map,
+                        descend_into_named_expressions=True,
+                        remove_named_expressions=False):
+    """
+
+    Parameters
+    ----------
+    expr : Pyomo expression
+       The source expression
+    substitution_map : dict
+       A dictionary mapping object ids in the source to the replacement objects.
+    descend_into_named_expressions : bool
+       True if replacement should go into named expression objects, False to halt at
+       a named expression
+    remove_named_expressions : bool
+       True if the named expressions should be replaced with a standard expression,
+       and False if the named expression should be left in place
+
+    Returns
+    -------
+       Pyomo expression : returns the new expression object
+    """
+    new_expr = ExpressionReplacementVisitor(
+            substitute=substitution_map,
+            descend_into_named_expressions=descend_into_named_expressions,
+            remove_named_expressions=remove_named_expressions
+            ).dfs_postorder_stack(expr)
+    return new_expr
+
 
 class ExpressionReplacementVisitor(object):
     """
@@ -906,12 +962,22 @@ class ExpressionReplacementVisitor(object):
                 if id(ans) == id(_obj):
                     ans = self.construct_node(_obj, _result[1:])
                 if ans.__class__ is MonomialTermExpression:
-                    if ( ( ans._args_[0].__class__ not in native_numeric_types
-                           and ans._args_[0].is_potentially_variable )
-                         or
-                         ( ans._args_[1].__class__ in native_numeric_types
-                           or not ans._args_[1].is_potentially_variable() ) ):
-                        ans.__class__ = ProductExpression
+                    # CDL This code wass trying to determine if we needed to change the MonomialTermExpression
+                    # to a ProductExpression, but it fails for the case of a MonomialExpression
+                    # that has its rhs Var replaced with another MonomialExpression (and might
+                    # fail for other cases as well.
+                    # Rather than trying to update the logic to catch all cases, I am choosing
+                    # to execute the actual product operator code instead to ensure things are
+                    # consistent
+                    # See WalkerTests.test_replace_expressions_with_monomial_term  in test_expr_pyomo5.py
+                    # to see the behavior
+                    # if ( ( ans._args_[0].__class__ not in native_numeric_types
+                    #        and ans._args_[0].is_potentially_variable )
+                    #      or
+                    #      ( ans._args_[1].__class__ in native_numeric_types
+                    #        or not ans._args_[1].is_potentially_variable() ) ):
+                    #     ans.__class__ = ProductExpression
+                    ans = ans._args_[0] * ans._args_[1]
                 elif ans.__class__ in NPV_expression_types:
                     # For simplicity, not-potentially-variable expressions are
                     # replaced with their potentially variable counterparts.
@@ -971,18 +1037,6 @@ def clone_expression(expr, substitute=None):
 #  _sizeof_expression
 # =====================================================
 
-class _SizeVisitor(SimpleExpressionVisitor):
-
-    def __init__(self):
-        self.counter = 0
-
-    def visit(self, node):
-        self.counter += 1
-
-    def finalize(self):
-        return self.counter
-
-
 def _sizeof_expression(expr):
     """
     Return the number of nodes in the expression tree.
@@ -994,15 +1048,14 @@ def _sizeof_expression(expr):
         A non-negative integer that is the number of
         interior and leaf nodes in the expression tree.
     """
-    #visitor = _SizeVisitor()
-    #return visitor.xbfs(expr)
-
-    a = [0]
-    def count(node):
-        a[0] += 1
-    return GenericExpressionVisitor(
-        enterNode=count,
-        finalizeResult=lambda data: a[0]).walk_expression(expr)
+    def enter(node):
+        return None, 1
+    def accept(node, data, child_result):
+        return data + child_result
+    return StreamBasedExpressionVisitor(
+        enterNode=enter,
+        acceptChildResult=accept,
+    ).walk_expression(expr)
 
 # =====================================================
 #  evaluate_expression
@@ -1063,7 +1116,7 @@ class _EvaluateConstantExpressionVisitor(ExpressionValueVisitor):
             if node._component()._mutable:
                 raise FixedExpressionError()
             return True, value(node)
-                
+
 
         if node.is_variable_type():
             if node.fixed:
@@ -1686,7 +1739,7 @@ class ExpressionBase(NumericValue):
             self.__class__ = self.__class__.__mro__[1]
 
         Note that this method is allowed to modify the current object
-        and return it.  But in some cases it may create a new 
+        and return it.  But in some cases it may create a new
         potentially variable object.
 
         Returns:
@@ -1743,7 +1796,7 @@ class ExpressionBase(NumericValue):
         a variable expression.
 
         This method returns :const:`True` when (a) the expression
-        tree contains one or more variables, or (b) the expression 
+        tree contains one or more variables, or (b) the expression
         tree contains a named expression. In both cases, the
         expression cannot be treated as constant since (a) the variables
         may not be fixed, or (b) the named expressions may be changed
@@ -1942,7 +1995,7 @@ class ExternalFunctionExpression(ExpressionBase):
         return None
 
     def _apply_operation(self, result):
-        return self._fcn.evaluate( result )     #pragma: no cover
+        return self._fcn.evaluate( result )
 
     def _to_string(self, values, verbose, smap, compute_values):
         return "{0}({1})".format(self.getname(), ", ".join(values))
@@ -2043,6 +2096,17 @@ class ProductExpression(ExpressionBase):
 
     def getname(self, *args, **kwds):
         return 'prod'
+
+    def _is_fixed(self, args):
+        # Anything times 0 equals 0, so one of the children is
+        # fixed and has a value of 0, then this expression is fixed
+        assert(len(args) == 2)
+        if all(args):
+            return True
+        for i in (0, 1):
+            if args[i] and value(self._args_[i]) == 0:
+                return True
+        return False
 
     def _apply_operation(self, result):
         _l, _r = result
@@ -2362,19 +2426,19 @@ class SumExpressionBase(_LinearOperatorExpression):
     """
     A base class for simple summation of expressions
 
-    The class hierarchy for summation is different than for other 
-    expression types.  For example, ProductExpression defines 
+    The class hierarchy for summation is different than for other
+    expression types.  For example, ProductExpression defines
     the class for representing binary products, and sub-classes are
     specializations of that class.
 
-    By contrast, the SumExpressionBase is not directly used to 
-    represent expressions.  Rather, this base class provides 
+    By contrast, the SumExpressionBase is not directly used to
+    represent expressions.  Rather, this base class provides
     commonly used methods and data.  The reason is that some
     subclasses of SumExpressionBase are binary while others
     are n-ary.
 
     Thus, developers will need to treat checks for summation
-    classes differently, depending on whether the binary/n-ary 
+    classes differently, depending on whether the binary/n-ary
     operations are different.
     """
 
