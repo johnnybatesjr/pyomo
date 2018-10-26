@@ -2,10 +2,12 @@
 #include "specbnd.hpp"
 typedef mc::Interval I;
 typedef mc::Specbnd<I> SB;
-
+#include "mccormick.hpp"
+typedef mc::McCormick<I> MC;
+typedef mc::Specbnd<MC> SBMC;
 
 //Build pyomo expression in MC++
-void *createVar(double lb, double pt, double ub, int count, int index)
+void *createVarSB(double lb, double pt, double ub, int count, int index)
 {
     SB var1( I( lb, ub ), index, count);
 
@@ -14,145 +16,154 @@ void *createVar(double lb, double pt, double ub, int count, int index)
     return ans;
 }
 
+void *createVarSBMC(double lb, double pt, double ub, int count, int index)
+{
+    SBMC var1( MC(I( lb, ub ), pt).sub(count, index), index, count);
+
+    void *ans = new SBMC(var1);
+
+    return ans;
+}
+
 void *createConstant(double cons)
 {
-    void *ans = new SB(cons);
+    void *ans = new SBMC(cons);
 
     return ans;
 }
 
-SB *mult(SB *var1, SB *var2)
+SBMC *mult(SBMC *var1, SBMC *var2)
 {
-    SB F = *var1 * *var2;
+    SBMC F = *var1 * *var2;
 
-    SB *ans = new SB(F);
+    SBMC *ans = new SBMC(F);
     return ans;
 }
 
-SB *add(SB *var1, SB *var2)
+SBMC *add(SBMC *var1, SBMC *var2)
 {
-    SB F = *var1 + *var2;
+    SBMC F = *var1 + *var2;
 
-    SB *ans = new SB(F);
+    SBMC *ans = new SBMC(F);
     return ans;
 }
 
-SB *power(SB *var1, SB *var2)
+SBMC *power(SBMC *var1, SBMC *var2)
 {
-    SB var = *var2;
+    SBMC var = *var2;
     double doub = var.I().l();
     int exponent = (int)doub;
 
-    SB F = pow(*var1, exponent);
+    SBMC F = pow(*var1, exponent);
 
-    SB *ans = new SB(F);
+    SBMC *ans = new SBMC(F);
     return ans;
 }
 
 
-SB *monomial(SB *var1, SB *var2)
+SBMC *monomial(SBMC *var1, SBMC *var2)
 {
-    SB F = *var1 * *var2;
+    SBMC F = *var1 * *var2;
 
-    SB *ans = new SB(F);
+    SBMC *ans = new SBMC(F);
     return ans;
 }
 
-SB *reciprocal(SB *var1, SB *var2)
+SBMC *reciprocal(SBMC *var1, SBMC *var2)
 {
-    SB F = inv(*var2);
+    SBMC F = inv(*var2);
 
-    SB *ans = new SB(F);
+    SBMC *ans = new SBMC(F);
     return ans;
 }
 
-SB *negation(SB *var1)
+SBMC *negation(SBMC *var1)
 {
-    SB F = 0 - *var1;
+    SBMC F = 0 - *var1;
 
-    SB *ans = new SB(F);
+    SBMC *ans = new SBMC(F);
     return ans;
 }
 /*
 fabs not supported
 
-SB *abs(SB *var1)
+SBMC *abs(SBMC *var1)
 {
-    SB F = fabs(*var1);
+    SBMC F = fabs(*var1);
 
-    SB *ans = new SB(F);
+    SBMC *ans = new SBMC(F);
     return ans;
 }
 */
 
-SB *trigSin(SB *var1)
+SBMC *trigSin(SBMC *var1)
 {
-    SB F = sin(*var1);
+    SBMC F = sin(*var1);
 
-    SB *ans = new SB(F);
+    SBMC *ans = new SBMC(F);
     return ans;
 }
 
-SB *trigCos(SB *var1)
+SBMC *trigCos(SBMC *var1)
 {
-    SB F = cos(*var1);
+    SBMC F = cos(*var1);
 
-    SB *ans = new SB(F);
+    SBMC *ans = new SBMC(F);
     return ans;
 }
 
-SB *trigTan(SB *var1)
+SBMC *trigTan(SBMC *var1)
 {
-    SB F = tan(*var1);
+    SBMC F = tan(*var1);
 
-    SB *ans = new SB(F);
+    SBMC *ans = new SBMC(F);
     return ans;
 }
 
-SB *atrigSin(SB *var1)
+SBMC *atrigSin(SBMC *var1)
 {
-    SB F = asin(*var1);
+    SBMC F = asin(*var1);
 
-    SB *ans = new SB(F);
+    SBMC *ans = new SBMC(F);
     return ans;
 }
 
-SB *atrigCos(SB *var1)
+SBMC *atrigCos(SBMC *var1)
 {
-    SB F = acos(*var1);
+    SBMC F = acos(*var1);
 
-    SB *ans = new SB(F);
+    SBMC *ans = new SBMC(F);
     return ans;
 }
 
-SB *atrigTan(SB *var1)
+SBMC *atrigTan(SBMC *var1)
 {
-    SB F = atan(*var1);
+    SBMC F = atan(*var1);
 
-    SB *ans = new SB(F);
+    SBMC *ans = new SBMC(F);
     return ans;
 }
 
-SB *NPV(SB *var1)
+SBMC *NPV(SBMC *var1)
 {
-    SB F = *var1;
+    SBMC F = *var1;
 
-    SB *ans = new SB(F);
+    SBMC *ans = new SBMC(F);
     return ans;
 }
 
 void *displayOutput(void *ptr)
 {
-    SB *var  = (SB*) ptr;
-    SB F = *var;
+    SBMC *var  = (SBMC*) ptr;
+    SBMC F = *var;
     std::cout << "F: " << F << std::endl;
 }
 
-SB *exponential(SB *var1)
+SBMC *exponential(SBMC *var1)
 {
-    SB F = exp(*var1);
+    SBMC F = exp(*var1);
 
-    SB *ans = new SB(F);
+    SBMC *ans = new SBMC(F);
     return ans;
 }
 
@@ -172,50 +183,63 @@ SB *exponential(SB *var1)
 
 
 
-//Get usable information from SB++
-double lower(SB *expr)
+//Get usable information from SBMC++
+double lower(SBMC *expr)
 {
-    SB F = *expr;
+    SBMC F = *expr;
     double Flb = F.I().l();
     return Flb;
 }
 
-double upper(SB *expr)
+double upper(SBMC *expr)
 {
-    SB F = *expr;
+    SBMC F = *expr;
     double Fub = F.I().u();
     return Fub;
 }
 
-double specbnd_u(SB *expr)
+double specbnd_u(SBMC *expr)
 {
-    SB F = *expr;
+    SBMC F = *expr;
     double Fsb_u = F.SI().u();
     return Fsb_u;
 }
 
-double specbnd_l(SB *expr)
+double specbnd_l(SBMC *expr)
 {
-    SB F = *expr;
+    SBMC F = *expr;
     double Fsb_l = F.SI().l();
     return Fsb_l;
 }
 
-/*
-double subcc(SB *expr, int index)
+double concave(SBMC *expr)
 {
-    SB F = *expr;
-    double Fccsub = F.ccsub(index);
+    SBMC F = *expr;
+    double Fcc = F.SI().cc();
+    return Fcc;
+}
+
+double convex(SBMC *expr)
+{
+    SBMC F = *expr;
+    double Fcv = F.SI().cv();
+    return Fcv;
+}
+
+double subcc(SBMC *expr, int index)
+{
+    SBMC F = *expr;
+    double Fccsub = F.SI().ccsub(index);
     return Fccsub;
 }
 
-double subcv(SB *expr, int index)
+double subcv(SBMC *expr, int index)
 {
-    SB F = *expr;
-    double Fcvsub = F.cvsub(index);
+    SBMC F = *expr;
+    double Fcvsub = F.SI().cvsub(index);
     return Fcvsub;
 }
-*/
+
 
 
 
@@ -231,9 +255,15 @@ double subcv(SB *expr, int index)
 
 extern "C"
 {
-    void *new_createVar(double lb, double pt, double ub, int count, int index)
+    void *new_createVarSB(double lb, double pt, double ub, int count, int index)
     {
-        void *ans = createVar(lb, pt, ub, count, index);
+        void *ans = createVarSB(lb, pt, ub, count, index);
+        return ans;
+    }
+
+    void *new_createVarSBMC(double lb, double pt, double ub, int count, int index)
+    {
+        void *ans = createVarSBMC(lb, pt, ub, count, index);
         return ans;
     }
 
@@ -244,89 +274,89 @@ extern "C"
         return ans;
     }
 
-    SB *new_mult(SB *var1, SB *var2)
+    SBMC *new_mult(SBMC *var1, SBMC *var2)
     {
-        SB *ans = mult(var1, var2);
+        SBMC *ans = mult(var1, var2);
         return ans;
     }
 
-    SB *new_add(SB *var1, SB *var2)
+    SBMC *new_add(SBMC *var1, SBMC *var2)
     {
-        SB *ans = add(var1, var2);
+        SBMC *ans = add(var1, var2);
         return ans;
     }
 
-    SB *new_power(SB *var1, SB *var2)
+    SBMC *new_power(SBMC *var1, SBMC *var2)
     {
-        SB *ans = power(var1, var2);
+        SBMC *ans = power(var1, var2);
         return ans;
     }
 
-    SB *new_monomial(SB *var1, SB *var2)
+    SBMC *new_monomial(SBMC *var1, SBMC *var2)
     {
-        SB *ans = monomial(var1, var2);
+        SBMC *ans = monomial(var1, var2);
         return ans;
     }
 
-    SB *new_reciprocal(SB *var1, SB *var2)
+    SBMC *new_reciprocal(SBMC *var1, SBMC *var2)
     {
-        SB *ans = reciprocal(var1, var2);
+        SBMC *ans = reciprocal(var1, var2);
         return ans;
     }
 
-    SB *new_negation(SB *var1)
+    SBMC *new_negation(SBMC *var1)
     {
-        SB *ans = negation(var1);
+        SBMC *ans = negation(var1);
         return ans;
     }
 /*
     fabs not supported
-    SB *new_abs(SB *var1)
+    SBMC *new_abs(SBMC *var1)
     {
-        SB *ans = abs(var1);
+        SBMC *ans = abs(var1);
         return ans;
     }
 */
 
-    SB *new_trigSin(SB *var1)
+    SBMC *new_trigSin(SBMC *var1)
     {
-        SB *ans = trigSin(var1);
+        SBMC *ans = trigSin(var1);
         return ans;
     }
 
-    SB *new_trigCos(SB *var1)
+    SBMC *new_trigCos(SBMC *var1)
     {
-        SB *ans = trigCos(var1);
+        SBMC *ans = trigCos(var1);
         return ans;
     }
 
-    SB *new_trigTan(SB *var1)
+    SBMC *new_trigTan(SBMC *var1)
     {
-        SB *ans = trigTan(var1);
+        SBMC *ans = trigTan(var1);
         return ans;
     }
 
-    SB *new_atrigSin(SB *var1)
+    SBMC *new_atrigSin(SBMC *var1)
     {
-        SB *ans = atrigSin(var1);
+        SBMC *ans = atrigSin(var1);
         return ans;
     }
 
-    SB *new_atrigCos(SB *var1)
+    SBMC *new_atrigCos(SBMC *var1)
     {
-        SB *ans = atrigCos(var1);
+        SBMC *ans = atrigCos(var1);
         return ans;
     }
 
-    SB *new_atrigTan(SB *var1)
+    SBMC *new_atrigTan(SBMC *var1)
     {
-        SB *ans = atrigTan(var1);
+        SBMC *ans = atrigTan(var1);
         return ans;
     }
 
-    SB *new_NPV(SB *var1)
+    SBMC *new_NPV(SBMC *var1)
     {
-        SB *ans = NPV(var1);
+        SBMC *ans = NPV(var1);
         return ans;
     }
 
@@ -335,48 +365,60 @@ extern "C"
         displayOutput(ptr);
     }
 
-    SB *new_exponential(SB *ptr1)
+    SBMC *new_exponential(SBMC *ptr1)
     {
-        SB *ans = exponential(ptr1);
+        SBMC *ans = exponential(ptr1);
         return ans;
     }
 
-    double new_lower(SB *expr)
+    double new_lower(SBMC *expr)
     {
         double ans = lower(expr);
         return ans;
     }
 
-    double new_upper(SB *expr)
+    double new_upper(SBMC *expr)
     {
         double ans = upper(expr);
         return ans;
     }
 
-    double new_specbnd_u(SB *expr)
+    double new_specbnd_u(SBMC *expr)
     {
         double ans = specbnd_u(expr);
         return ans;
     }
 
-    double new_specbnd_l(SB *expr)
+    double new_specbnd_l(SBMC *expr)
     {
         double ans = specbnd_l(expr);
         return ans;
     }
-/*
-    double new_subcc(SB *expr, int index)
+
+    double new_concave(SBMC *expr)
+    {
+        double ans = concave(expr);
+        return ans;
+    }
+
+    double new_convex(SBMC *expr)
+    {
+        double ans = convex(expr);
+        return ans;
+    }
+
+    double new_subcc(SBMC *expr, int index)
     {
         double ans = subcc(expr, index);
         return ans;
     }
 
-        double new_subcv(SB *expr, int index)
+        double new_subcv(SBMC *expr, int index)
     {
         double ans = subcv(expr, index);
         return ans;
     }
-*/
+
 }
 
 //g++ -I ~/MC++/mcpp/src/3rdparty/fadbad++ -I ~/MC++/mcpp/src/mc -I /usr/include/python2.7/ -I ~/MC++/mcpp/src/3rdparty/cpplapack-2015.05.11-1/include/ -fPIC -O2 -c spectralInterface.cpp

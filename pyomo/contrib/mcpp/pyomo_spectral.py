@@ -36,7 +36,7 @@ NPV_expressions = set(
      NPV_UnaryFunctionExpression))
 
 
-class MCPP_visitor(StreamBasedExpressionVisitor):
+class MCPP_visitorSBMC(StreamBasedExpressionVisitor):
     """Creates an MC++ expression from the corresponding Pyomo expression.
 
     This class walks a pyomo expression tree and builds up the corresponding
@@ -45,7 +45,7 @@ class MCPP_visitor(StreamBasedExpressionVisitor):
     """
 
     def __init__(self, mcpp_lib, expression):
-        super(MCPP_visitor, self).__init__()
+        super(MCPP_visitorSBMC, self).__init__()
         self.expr = expression
         self.mcpp = mcpp_lib
         self.declare_mcpp_library_calls()
@@ -62,12 +62,19 @@ class MCPP_visitor(StreamBasedExpressionVisitor):
 
     def declare_mcpp_library_calls(self):
         # Create MC type variable
-        self.mcpp.new_createVar.argtypes = [ctypes.c_double,
+        self.mcpp.new_createVarSB.argtypes = [ctypes.c_double,
                                             ctypes.c_double,
                                             ctypes.c_double,
                                             ctypes.c_int,
                                             ctypes.c_int]
-        self.mcpp.new_createVar.restype = ctypes.c_void_p
+        self.mcpp.new_createVarSB.restype = ctypes.c_void_p
+
+        self.mcpp.new_createVarSBMC.argtypes = [ctypes.c_double,
+                                            ctypes.c_double,
+                                            ctypes.c_double,
+                                            ctypes.c_int,
+                                            ctypes.c_int]
+        self.mcpp.new_createVarSBMC.restype = ctypes.c_void_p
 
         # Create MC type constant
         self.mcpp.new_createConstant.argtypes = [ctypes.c_double]
@@ -232,11 +239,12 @@ class MCPP_visitor(StreamBasedExpressionVisitor):
             logger.warning(
                 'Var %s missing value. Assuming midpoint value of %s'
                 % (var.name, var_val))
-        return self.mcpp.new_createVar(
+        return self.mcpp.new_createVarSBMC(
             lb, var_val, ub, self.num_vars, var_idx)
 
     def finalizeResult(self, node_result):
         return node_result
+
 
 
 class Spectral(object):
@@ -280,7 +288,7 @@ class Spectral(object):
     def __init__(self, expression):
         self.mcpp_lib = ctypes.CDLL(path + '/spectralInterface.so')
         self.oExpr = expression
-        self.visitor = MCPP_visitor(self.mcpp_lib, expression)
+        self.visitor = MCPP_visitorSBMC(self.mcpp_lib, expression)
         self.mcppExpression = self.visitor.walk_expression(expression)
         self.expr = self.mcppExpression
 
@@ -298,11 +306,11 @@ class Spectral(object):
         self.mcpp_lib.new_specbnd_l.argtypes = [ctypes.c_void_p]
         self.mcpp_lib.new_specbnd_l.restype = ctypes.c_double
 
-        #self.mcpp_lib.new_subcc.argtypes = [ctypes.c_void_p, ctypes.c_int]
-        #self.mcpp_lib.new_subcc.restype = ctypes.c_double
-        #
-        #self.mcpp_lib.new_subcv.argtypes = [ctypes.c_void_p, ctypes.c_int]
-        #self.mcpp_lib.new_subcv.restype = ctypes.c_double
+        self.mcpp_lib.new_subcc.argtypes = [ctypes.c_void_p, ctypes.c_int]
+        self.mcpp_lib.new_subcc.restype = ctypes.c_double
+        
+        self.mcpp_lib.new_subcv.argtypes = [ctypes.c_void_p, ctypes.c_int]
+        self.mcpp_lib.new_subcv.restype = ctypes.c_double
 
     def displayOutput(self):
         return self.mcpp_lib.new_displayOutput(self.expr)
@@ -319,26 +327,26 @@ class Spectral(object):
     def specbnd_l(self):
         return self.mcpp_lib.new_specbnd_l(self.expr)
 
-    #def subcc(self):
-    #    ans = ComponentMap()
-    #    for key in self.visitor.var_to_idx:
-    #        i = self.visitor.var_to_idx[key]
-    #        ans[key] = self.mcpp_lib.new_subcc(self.expr, i)
-    #    return ans
-    #
-    #def subcv(self):
-    #    ans = ComponentMap()
-    #    for key in self.visitor.var_to_idx:
-    #        i = self.visitor.var_to_idx[key]
-    #        ans[key] = self.mcpp_lib.new_subcv(self.expr, i)
-    #    return ans
+    def subcc(self):
+        ans = ComponentMap()
+        for key in self.visitor.var_to_idx:
+            i = self.visitor.var_to_idx[key]
+            ans[key] = self.mcpp_lib.new_subcc(self.expr, i)
+        return ans
+    
+    def subcv(self):
+        ans = ComponentMap()
+        for key in self.visitor.var_to_idx:
+            i = self.visitor.var_to_idx[key]
+            ans[key] = self.mcpp_lib.new_subcv(self.expr, i)
+        return ans
 
-    #def changePoint(self, var, point):
-    #    var.set_value(point)
-    #    # WARNING: TODO: this has side effects
-    #    self.visitor = MCPP_visitor(self.mcpp_lib, self.oExpr)
-    #    self.mcppExpression = self.visitor.walk_expression(self.oExpr)
-    #    self.expr = self.mcppExpression
+    def changePoint(self, var, point):
+        var.set_value(point)
+        # WARNING: TODO: this has side effects
+        self.visitor = MCPP_visitorSBMC(self.mcpp_lib, self.oExpr)
+        self.mcppExpression = self.visitor.walk_expression(self.oExpr)
+        self.expr = self.mcppExpression
 
 
 
