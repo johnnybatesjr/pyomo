@@ -300,6 +300,12 @@ class Spectral(object):
         self.mcpp_lib.new_upper.argtypes = [ctypes.c_void_p]
         self.mcpp_lib.new_upper.restype = ctypes.c_double
 
+        self.mcpp_lib.new_concave.argtypes = [ctypes.c_void_p]
+        self.mcpp_lib.new_concave.restype = ctypes.c_double
+        
+        self.mcpp_lib.new_convex.argtypes = [ctypes.c_void_p]
+        self.mcpp_lib.new_convex.restype = ctypes.c_double
+
         self.mcpp_lib.new_specbnd_u.argtypes = [ctypes.c_void_p]
         self.mcpp_lib.new_specbnd_u.restype = ctypes.c_double
 
@@ -326,6 +332,12 @@ class Spectral(object):
 
     def specbnd_l(self):
         return self.mcpp_lib.new_specbnd_l(self.expr)
+
+    def concave(self):
+        return self.mcpp_lib.new_concave(self.expr)
+    
+    def convex(self):
+        return self.mcpp_lib.new_convex(self.expr)
 
     def subcc(self):
         ans = ComponentMap()

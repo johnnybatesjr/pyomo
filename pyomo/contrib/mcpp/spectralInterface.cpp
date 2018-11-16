@@ -170,19 +170,6 @@ SBMC *exponential(SBMC *var1)
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
 //Get usable information from SBMC++
 double lower(SBMC *expr)
 {
