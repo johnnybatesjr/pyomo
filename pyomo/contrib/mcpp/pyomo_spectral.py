@@ -360,6 +360,31 @@ class Spectral(object):
         self.mcppExpression = self.visitor.walk_expression(self.oExpr)
         self.expr = self.mcppExpression
 
+    def underestimator(m):
+        eqn = sbmc(m.e.expr)
+        alpha = eqn.specbnd_l()
+        m.temp = 0
+        for i in m.component_data_objects(ctype=Var,
+                                               active=True,
+                                               descend_into=True):
+            m.temp = m.temp + (i.lb - i) * (i.ub - i)
+        #L(x) = f(x) + alph * summ_i((x^L_i - x_i)(x^U_i - x_i))
+        beta = alpha * m.temp
+        return Expression(expr = m.e + beta)
+
+    def overestimator(m):
+        eqn = sbmc(m.e.expr)
+        alpha = eqn.specbnd_u()
+        m.temp = 0
+        for i in m.component_data_objects(ctype=Var,
+                                               active=True,
+                                               descend_into=True):
+            m.temp = m.temp + (i.lb - i) * (i.ub - i)
+        #L(x) = f(x) + alph * summ_i((x^L_i - x_i)(x^U_i - x_i))
+        beta = alpha * m.temp
+        return Expression(expr = m.e + beta)
+
+
 
 
 
